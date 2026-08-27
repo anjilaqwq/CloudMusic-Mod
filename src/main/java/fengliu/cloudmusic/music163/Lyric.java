@@ -1,176 +1,147 @@
 package fengliu.cloudmusic.music163;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import fengliu.cloudmusic.command.MusicCommand;
-import fengliu.cloudmusic.util.MusicPlayer;
 
-import java.util.LinkedHashMap;
+import java.util.Collections;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * 滚动歌词
+ * Selects the lyric line matching the player's current playback position.
  */
-public class Lyric implements Runnable{
-    private final Map<Long, String> lyric;
-    private final Map<Long, String> tlyric;
-    private boolean loopIn = true;
-    private boolean load = true;
-    private String[] toLyric = {};
+public class Lyric {
+    private static final Pattern TIMESTAMP = Pattern.compile("\\[(\\d+):(\\d{1,2})(?:[.:](\\d{1,3}))?]");
+    private static final Pattern OFFSET = Pattern.compile("\\[offset:([+-]?\\d+)]", Pattern.CASE_INSENSITIVE);
+    private static final String[] NO_LYRIC = new String[0];
+
+    private final NavigableMap<Long, String> lyric;
+    private final NavigableMap<Long, String> translatedLyric;
+    private volatile boolean active;
 
     /**
-     * 将歌词时间字符串转换为毫秒
-     * @param n 歌词时间字符串
-     * @return 歌词时间毫秒
+     * Converts an LRC timestamp to milliseconds. One, two and three digit
+     * fractions represent tenths, hundredths and milliseconds respectively.
      */
-    public static long timeStrToTime(String n){
-        try{
-            String[] timeStr = n.split(":");
-            String[] secondStr = timeStr[1].split("\\.");
+    public static long timeStrToTime(String value) {
+        Matcher matcher = Pattern.compile("^(\\d+):(\\d{1,2})(?:[.:](\\d{1,3}))?$").matcher(value);
+        if (!matcher.matches()) {
+            return 0;
+        }
 
-            int minute = Integer.parseInt(timeStr[0]) * 60 * 1000;
-            int second = Integer.parseInt(secondStr[0]) * 1000;
-            int millisecond = Integer.parseInt(secondStr[1]) * 10;
-            return minute + second + millisecond;
-        }catch (Exception err){
+        try {
+            long milliseconds = (Long.parseLong(matcher.group(1)) * 60L + Long.parseLong(matcher.group(2))) * 1000L;
+            String fraction = matcher.group(3);
+            if (fraction != null) {
+                milliseconds += switch (fraction.length()) {
+                    case 1 -> Long.parseLong(fraction) * 100L;
+                    case 2 -> Long.parseLong(fraction) * 10L;
+                    default -> Long.parseLong(fraction);
+                };
+            }
+            return milliseconds;
+        } catch (NumberFormatException ignored) {
             return 0;
         }
     }
 
     /**
-     * 处理歌词字符串
-     * @param lyric 歌词字符串
-     * @return 歌词 Map
+     * Parses LRC in timestamp order. A line may contain multiple timestamps.
      */
-    public static Map<Long, String> lyricToMap(String lyric){
-        Map<Long, String> lyricMap = new LinkedHashMap<>();
-        for (String lyricRow : lyric.split("\n")) {
+    public static Map<Long, String> lyricToMap(String source) {
+        if (source == null || source.isBlank()) {
+            return Collections.emptyNavigableMap();
+        }
+
+        long offset = 0;
+        Matcher offsetMatcher = OFFSET.matcher(source);
+        if (offsetMatcher.find()) {
             try {
-                String[] lyricRows = lyricRow.substring(1).split("]", 2);
-                if (lyricRows.length < 2){
-                    continue;
-                }
-
-                lyricMap.put(timeStrToTime(lyricRows[0]), lyricRows[1]);
-            }catch(Exception err){
+                offset = Long.parseLong(offsetMatcher.group(1));
+            } catch (NumberFormatException ignored) {
+                // Ignore malformed metadata.
             }
         }
-        return lyricMap;
+
+        NavigableMap<Long, String> result = new TreeMap<>();
+        for (String row : source.split("\\R")) {
+            Matcher matcher = TIMESTAMP.matcher(row);
+            int textStart = -1;
+            while (matcher.find()) {
+                textStart = matcher.end();
+            }
+            if (textStart < 0) {
+                continue;
+            }
+
+            String text = row.substring(textStart).trim();
+            matcher.reset();
+            while (matcher.find()) {
+                long timestamp = timeStrToTime(matcher.group().substring(1, matcher.group().length() - 1));
+                result.put(Math.max(0, timestamp + offset), text);
+            }
+        }
+        return Collections.unmodifiableNavigableMap(result);
     }
 
-    public Lyric(JsonObject data){
-        String lyric = data.getAsJsonObject("lrc").get("lyric").getAsString();
-        if(lyric.equals("")){
-            this.lyric = new LinkedHashMap<>();
-            this.tlyric = this.lyric;
-            return;
-        }
-
-        this.lyric = lyricToMap(lyric);
-        if(!data.has("tlyric")){
-            this.tlyric = new LinkedHashMap<>();
-            return;
-        }
-
-        String tlyric = data.getAsJsonObject("tlyric").get("lyric").getAsString();
-        if(tlyric.equals("")){
-            this.tlyric = new LinkedHashMap<>();
-            return;
-        }
-
-        this.tlyric = lyricToMap(data.getAsJsonObject("tlyric").get("lyric").getAsString());
+    public Lyric(JsonObject data) {
+        this.lyric = parseSection(data, "lrc");
+        this.translatedLyric = parseSection(data, "tlyric");
     }
 
-    @Override
-    public void run() {
-        if(this.lyric.isEmpty()){
-            this.toLyric.clone();
-            return;
+    private static NavigableMap<Long, String> parseSection(JsonObject data, String sectionName) {
+        if (data == null || !data.has(sectionName) || !data.get(sectionName).isJsonObject()) {
+            return Collections.emptyNavigableMap();
         }
 
-        MusicPlayer player = MusicCommand.getPlayer();
-        this.lyric.forEach((lyricTime, lyricData) -> {
-            if (!this.loopIn) {
-                return;
-            }
+        JsonElement value = data.getAsJsonObject(sectionName).get("lyric");
+        if (value == null || value.isJsonNull()) {
+            return Collections.emptyNavigableMap();
+        }
 
-            String lyric = null, tlyric = null;
-            while (this.loopIn) {
-                synchronized(this){
-                    while(!load) {
-                        try {
-                            wait();
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                }
-
-                long time = player.getPlayingProgress();
-                if (time >= lyricTime){
-                    lyric = lyricData;
-                    tlyric = this.tlyric.get(lyricTime);
-                    break;
-                }
-            }
-
-            if (lyric != null && tlyric == null){
-                this.toLyric = new String[]{lyric};
-            }
-
-            if(lyric != null && tlyric != null){
-                this.toLyric = new String[]{lyric, tlyric};
-            }
-
-        });
-        this.toLyric.clone();
+        Map<Long, String> parsed = lyricToMap(value.getAsString());
+        if (parsed.isEmpty()) {
+            return Collections.emptyNavigableMap();
+        }
+        return Collections.unmodifiableNavigableMap(new TreeMap<>(parsed));
     }
 
     /**
-     * 获取当前滚动到的歌词
-     * @return 歌词
+     * Returns the lyric for the current progress without a polling thread.
      */
     public String[] getToLyric() {
-        return toLyric;
-    }
-
-    /**
-     * 开始歌词滚动
-     */
-    public void start(){
-        Thread thread = new Thread(this);
-        thread.setDaemon(true);
-        thread.setName("CloudMusicLyric thread");
-        thread.start();
-    }
-
-    /**
-     * 退出歌词滚动
-     */
-    public void exit(){
-        this.loopIn = false;
-        synchronized(this){
-            this.load = true;
-            notifyAll();
+        if (!this.active || this.lyric.isEmpty()) {
+            return NO_LYRIC;
         }
+
+        Map.Entry<Long, String> current = this.lyric.floorEntry(MusicCommand.getPlayer().getPlayingProgress());
+        if (current == null || current.getValue().isBlank()) {
+            return NO_LYRIC;
+        }
+
+        String translation = this.translatedLyric.get(current.getKey());
+        if (translation == null || translation.isBlank() || translation.equals(current.getValue())) {
+            return new String[]{current.getValue()};
+        }
+        return new String[]{current.getValue(), translation};
     }
 
-    /**
-     * 暂停歌词滚动
-     */
-    public void stop(){
-        synchronized(this){
-            this.load = false;
-            notifyAll();
-        }
+    public void start() {
+        this.active = true;
     }
 
-    /**
-     * 继续歌词滚动
-     */
-    public void continues(){
-        synchronized(this){
-            this.load = true;
-            notifyAll();
-        }
+    public void exit() {
+        this.active = false;
+    }
+
+    /** Pausing keeps the current line visible. */
+    public void stop() {
+    }
+
+    public void continues() {
     }
 }

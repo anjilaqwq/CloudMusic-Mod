@@ -4,13 +4,13 @@ package fengliu.cloudmusic.music163;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Map;
-
+import java.util.concurrent.ThreadLocalRandom;
+import net.minecraft.network.chat.Component;
 import com.google.gson.JsonObject;
 import fengliu.cloudmusic.command.MusicCommand;
 import fengliu.cloudmusic.config.Configs;
 import fengliu.cloudmusic.render.MusicIconTexture;
 import fengliu.cloudmusic.util.HttpClient;
-import net.minecraft.text.Text;
 
 public class LoginMusic163 {
     private Map<String, String> Header = new HashMap<String, String>();
@@ -91,7 +91,7 @@ public class LoginMusic163 {
         data.put("countrycode", countryCode);
         data.put("phone", phone);
 
-        return this.api.POST_LOGIN("/api/login/cellphone", data);
+        return this.api.POST_LOGIN("/api/w/login/cellphone", data);
     }
 
     /**
@@ -108,7 +108,7 @@ public class LoginMusic163 {
         data.put("countrycode", countryCode);
         data.put("phone", phone);
 
-        return this.api.POST_LOGIN("/api/login/cellphone", data);
+        return this.api.POST_LOGIN("/api/w/login/cellphone", data);
     }
 
     /**
@@ -123,7 +123,7 @@ public class LoginMusic163 {
         data.put("password", LoginMusic163.encryption(password));
         data.put("rememberLogin", true);
 
-        return this.api.POST_LOGIN("/api/login", data);
+        return this.api.POST_LOGIN("/api/w/login", data);
     }
 
     /**
@@ -132,9 +132,23 @@ public class LoginMusic163 {
      */
     public String qrKey(){
         Map<String, Object> data = new HashMap<>();
-        data.put("type", 1);
+        data.put("type", 3);
 
-        JsonObject json = this.api.POST_API("/api/login/qrcode/unikey", data);
+        HttpClient.HttpResult result = this.api.POST("/api/login/qrcode/unikey", data);
+        JsonObject json = result.getJson();
+        if (!json.has("code") || json.get("code").getAsInt() != 200) {
+            throw new HttpClient.ApiException(
+                    json.has("code") ? json.get("code").getAsInt() : -1,
+                    json.has("message") ? json.get("message").getAsString() : json.toString());
+        }
+
+        // The QR key response supplies a device-session cookie (usually NMTID).
+        // The polling request must reuse it or a scan can remain stuck at code 801.
+        String sessionCookie = result.getSetCookie();
+        if (!sessionCookie.isBlank()) {
+            String currentCookie = this.api.getCookies();
+            this.api.setCookies(currentCookie + (currentCookie.endsWith("; ") ? "" : "; ") + sessionCookie);
+        }
         return json.get("unikey").getAsString();
     }
 
@@ -147,7 +161,7 @@ public class LoginMusic163 {
     private HttpClient.HttpResult qrCheck(String qrKey){
         Map<String, Object> data = new HashMap<>();
         data.put("key", qrKey);
-        data.put("type", 1);
+        data.put("type", 3);
 
         return this.api.POST("/api/login/qrcode/client/login", data);
     }
@@ -157,7 +171,13 @@ public class LoginMusic163 {
      * @param qrKey 二维码 key
      */
     public void getQRCodeTexture(String qrKey){
-        MusicIconTexture.getQRCode("https://music.163.com/login?codekey=" + qrKey);
+        // Current web QR login requires a chainId. This matches api-enhanced's
+        // platform=web QR generation flow.
+        String chainId = "v1_unknown-%d_web_login_%d".formatted(
+                ThreadLocalRandom.current().nextInt(1_000_000),
+                System.currentTimeMillis());
+        MusicIconTexture.getQRCode(
+                "https://music.163.com/login?codekey=" + qrKey + "&chainId=" + chainId);
     }
 
     /**
@@ -175,7 +195,7 @@ public class LoginMusic163 {
 
             int code = json.get("code").getAsInt();
             if(code == 800){
-                throw new ActionException(Text.translatable("cloudmusic.exception.login.qr.code"));
+                throw new ActionException(Component.translatable("cloudmusic.exception.login.qr.code"));
             }
 
             if(code == 803){
@@ -186,6 +206,6 @@ public class LoginMusic163 {
             qrCheckNum -= 1;
         }
 
-        throw new ActionException(Text.translatable("cloudmusic.exception.login.qr.code.time.out"));
+        throw new ActionException(Component.translatable("cloudmusic.exception.login.qr.code.time.out"));
     }
 }

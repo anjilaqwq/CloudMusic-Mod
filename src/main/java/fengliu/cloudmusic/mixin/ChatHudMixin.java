@@ -1,13 +1,6 @@
 package fengliu.cloudmusic.mixin;
 
 import fengliu.cloudmusic.music163.Shares;
-import net.minecraft.client.gui.hud.ChatHud;
-import net.minecraft.client.gui.hud.MessageIndicator;
-import net.minecraft.network.message.MessageSignatureData;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -17,8 +10,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.client.multiplayer.chat.GuiMessageTag;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MessageSignature;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
 
-@Mixin(ChatHud.class)
+@Mixin(ChatComponent.class)
 public class ChatHudMixin {
     @Unique
     private static final Pattern SHAR_PATTERN = Pattern.compile("CloudMusic#.+\\sid:\\s[^\\sid:a-zA-Z]\\w[^\\sa-zA-Z]+$", Pattern.CASE_INSENSITIVE);
@@ -42,7 +42,7 @@ public class ChatHudMixin {
      * @param message 消息
      */
     @Unique
-    private void setShar(Text message){
+    private void setShar(Component message){
         Matcher sharMatcher = SHAR_PATTERN.matcher(message.getString());
         if (!isSharMessage(sharMatcher)) {
             return;
@@ -59,13 +59,12 @@ public class ChatHudMixin {
             }
 
             try {
-                ((MutableText) message).setStyle(
-                    Style.EMPTY.withClickEvent(new ClickEvent(
-                            ClickEvent.Action.SUGGEST_COMMAND,
+                ((MutableComponent) message).setStyle(
+                    Style.EMPTY.withClickEvent(new ClickEvent.SuggestCommand(
                             shar.getCommand(Long.parseLong(keyValuePair[1]))
                         ))
                         .withColor(0x87CEEB)
-                        .withUnderline(true)
+                        .withUnderlined(true)
                 );
             } catch (NumberFormatException err) {
                 return;
@@ -75,13 +74,8 @@ public class ChatHudMixin {
         }
     }
 
-    @Inject(method = "addMessage(Lnet/minecraft/text/Text;)V", at = @At("HEAD"))
-    public void addMessage(Text message, CallbackInfo info){
-        setShar(message);
-    }
-
-    @Inject(method = "addMessage(Lnet/minecraft/text/Text;Lnet/minecraft/network/message/MessageSignatureData;Lnet/minecraft/client/gui/hud/MessageIndicator;)V ", at = @At("HEAD"))
-    public void addMessage(Text message, @Nullable MessageSignatureData signature, @Nullable MessageIndicator indicator, CallbackInfo info){
+    @Inject(method = "addPlayerMessage", at = @At("HEAD"))
+    public void addMessage(Component message, @Nullable MessageSignature signature, @Nullable GuiMessageTag indicator, CallbackInfo info){
         setShar(message);
     }
 }

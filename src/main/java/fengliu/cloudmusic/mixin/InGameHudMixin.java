@@ -1,7 +1,6 @@
 package fengliu.cloudmusic.mixin;
 
 import com.google.gson.JsonElement;
-import com.mojang.blaze3d.systems.RenderSystem;
 import fengliu.cloudmusic.command.MusicCommand;
 import fengliu.cloudmusic.config.Configs;
 import fengliu.cloudmusic.music163.IMusic;
@@ -9,63 +8,57 @@ import fengliu.cloudmusic.music163.data.DjMusic;
 import fengliu.cloudmusic.music163.data.Music;
 import fengliu.cloudmusic.render.MusicIconTexture;
 import fengliu.cloudmusic.util.MusicPlayer;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.hud.InGameHud;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.Hud;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.effect.MobEffectInstance;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.function.Function;
-
-@Mixin(InGameHud.class)
+@Mixin(Hud.class)
 public abstract class InGameHudMixin {
 
     @Unique
-    private final MinecraftClient client = MinecraftClient.getInstance();
+    private final Minecraft client = Minecraft.getInstance();
 
-    @Inject(method = "<init>", at = @At("TAIL"))
-    public void initLyricRender(MinecraftClient client, CallbackInfo ci) {
-        HudRenderCallback.EVENT.register((drawContext, renderTickCounter) -> {
-            MusicPlayer player = MusicCommand.getPlayer();
-            IMusic playingMusic = player.getPlayingMusic();
-            if (playingMusic == null){
-                return;
-            }
-
-            if (Configs.GUI.STOP_PLAY_SHOW_UI.getBooleanValue() && !player.isPlaying()){
-                return;
-            }
-
-            float lyricScale = (float) Configs.GUI.LYRIC_SCALE.getDoubleValue();
-            int lyricY = Configs.GUI.LYRIC_Y.getIntegerValue();
-            int lyricX = Configs.GUI.LYRIC_X.getIntegerValue();
-            int lyricColor = Configs.GUI.LYRIC_COLOR.getIntegerValue();
-            for (String lyric : MusicCommand.getPlayer().getLyric()) {
-                MatrixStack lyricMatrices = new MatrixStack();
-                lyricMatrices.scale(lyricScale, lyricScale, lyricScale);
-                drawContext.drawText(client.textRenderer, lyric, lyricX, lyricY, lyricColor, true);
-                lyricY += 10;
-            }
-        });
+    /**
+     * Minecraft 26.2 treats text colors as ARGB without filling in a missing
+     * alpha channel. Keep old CloudMusic configs such as #00FFFFFF readable.
+     */
+    @Unique
+    private static int cloudmusic$opaqueTextColor(int color) {
+        return (color & 0xFF000000) == 0 ? color | 0xFF000000 : color;
     }
 
     @Unique
-    public void renderLoginQrCode(DrawContext context) {
+    private void renderLyrics(GuiGraphicsExtractor context) {
+        float lyricScale = (float) Configs.GUI.LYRIC_SCALE.getDoubleValue();
+        int lyricY = Configs.GUI.LYRIC_Y.getIntegerValue();
+        int lyricX = Configs.GUI.LYRIC_X.getIntegerValue();
+        int lyricColor = cloudmusic$opaqueTextColor(Configs.GUI.LYRIC_COLOR.getIntegerValue());
+
+        context.pose().pushMatrix();
+        context.pose().scale(lyricScale, lyricScale);
+        for (String lyric : MusicCommand.getPlayer().getLyric()) {
+            context.text(client.font, lyric, Math.round(lyricX / lyricScale), Math.round(lyricY / lyricScale), lyricColor, true);
+            lyricY += 10;
+        }
+        context.pose().popMatrix();
+    }
+
+    @Unique
+    public void renderLoginQrCode(GuiGraphicsExtractor context) {
         if (!MusicCommand.loadQRCode) {
             return;
         }
-        Function<Identifier, RenderLayer> renderLayer = RenderLayer::getGuiTexturedOverlay;
-        context.drawTexture(renderLayer, MusicIconTexture.QR_CODE_ID, 5, 10, 1f, 1f, 64, 64, 64, 64);
+        context.blit(RenderPipelines.GUI_TEXTURED, MusicIconTexture.QR_CODE_ID, 5, 10, 1f, 1f, 64, 64, 64, 64);
     }
 
     @Unique
@@ -77,8 +70,8 @@ public abstract class InGameHudMixin {
         }
 
         int offset = 0;
-        for (StatusEffectInstance statusEffect : this.client.player.getStatusEffects()) {
-            if (statusEffect.getEffectType().value().isBeneficial()) {
+        for (MobEffectInstance statusEffect : this.client.player.getActiveEffects()) {
+            if (statusEffect.getEffect().value().isBeneficial()) {
                 offset = 1;
             } else {
                 offset = 2;
@@ -92,8 +85,8 @@ public abstract class InGameHudMixin {
         return new int[]{y + Configs.GUI.MUSIC_INFO_EFFECT_OFFSET_Y.getIntegerValue() * offset, x + Configs.GUI.MUSIC_INFO_EFFECT_OFFSET_X.getIntegerValue()};
     }
 
-    @Inject(method = "render", at = @At("HEAD"))
-    public void render(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+    @Inject(method = "extractRenderState", at = @At("TAIL"))
+    public void render(GuiGraphicsExtractor context, DeltaTracker tickCounter, CallbackInfo ci) {
         this.renderLoginQrCode(context);
 
         MusicPlayer player = MusicCommand.getPlayer();
@@ -107,12 +100,12 @@ public abstract class InGameHudMixin {
             return;
         }
 
-        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        this.renderLyrics(context);
         if (!Configs.GUI.MUSIC_INFO.getBooleanValue()) {
             return;
         }
 
-        int width = this.client.getWindow().getScaledWidth();
+        int width = context.guiWidth();
 
         int[] pos = this.getMusicInfoPos();
         int y = pos[0];
@@ -124,27 +117,26 @@ public abstract class InGameHudMixin {
         if (progress > 115) {
             progress = 115;
         }
-        Function<Identifier, RenderLayer> renderLayer = RenderLayer::getGuiTexturedOverlay;
         context.fill(width - 145 - x, 40 + y, width - 145 + progress - x, 43 + y, Configs.GUI.MUSIC_PLAYED_PROGRESS_BAR_COLOR.getIntegerValue());
-        context.drawTexture(renderLayer, MusicIconTexture.MUSIC_ICON_ID, width - 172 - x, (int) (2.5f + y), 32f, 32f, 32, 32, 32, 32);
-        context.drawText(this.client.textRenderer, playingMusic.getName().length() > 16 ? playingMusic.getName().substring(0, 16) + "..." : playingMusic.getName(), width - 135 - x, 4 + y, Configs.GUI.MUSIC_INFO_TITLE_FONT_COLOR.getIntegerValue(), true);
+        context.blit(RenderPipelines.GUI_TEXTURED, MusicIconTexture.MUSIC_ICON_ID, width - 172 - x, (int) (2.5f + y), 32f, 32f, 32, 32, 32, 32);
+        context.text(this.client.font, playingMusic.getName().length() > 16 ? playingMusic.getName().substring(0, 16) + "..." : playingMusic.getName(), width - 135 - x, 4 + y, cloudmusic$opaqueTextColor(Configs.GUI.MUSIC_INFO_TITLE_FONT_COLOR.getIntegerValue()), true);
 
-        int progressFontColor = Configs.GUI.MUSIC_PROGRESS_FONT_COLOR.getIntegerValue();
-        context.drawText(this.client.textRenderer, player.getPlayingProgressToString(), width - 172 - x, 38 + y, progressFontColor, true);
-        context.drawText(this.client.textRenderer, playingMusic.getDurationToString(), width - 28 - x, 38 + y, progressFontColor, true);
-        int musicFontColor = Configs.GUI.MUSIC_INFO_FONT_COLOR.getIntegerValue();
+        int progressFontColor = cloudmusic$opaqueTextColor(Configs.GUI.MUSIC_PROGRESS_FONT_COLOR.getIntegerValue());
+        context.text(this.client.font, player.getPlayingProgressToString(), width - 172 - x, 38 + y, progressFontColor, true);
+        context.text(this.client.font, playingMusic.getDurationToString(), width - 28 - x, 38 + y, progressFontColor, true);
+        int musicFontColor = cloudmusic$opaqueTextColor(Configs.GUI.MUSIC_INFO_FONT_COLOR.getIntegerValue());
         if (playingMusic instanceof DjMusic music) {
-            context.drawText(this.client.textRenderer, Text.translatable("cloudmusic.info.dj.creator", music.dj.get("nickname").getAsString()), width - 135 - x, 14 + y, musicFontColor, true);
-            context.drawText(this.client.textRenderer, Text.translatable("cloudmusic.info.dj.music.count", music.listenerCount, music.likedCount), width - 135 - x, 24 + y, musicFontColor, true);
+            context.text(this.client.font, Component.translatable("cloudmusic.info.dj.creator", music.dj.get("nickname").getAsString()), width - 135 - x, 14 + y, musicFontColor, true);
+            context.text(this.client.font, Component.translatable("cloudmusic.info.dj.music.count", music.listenerCount, music.likedCount), width - 135 - x, 24 + y, musicFontColor, true);
             return;
         }
 
         Music music = (Music) playingMusic;
         if (!music.aliasName.isEmpty()) {
-            context.drawText(this.client.textRenderer, music.aliasName.length() > 16 ? music.aliasName.substring(0, 16) + "..." : music.aliasName, width - 135 - x, 14 + y, musicFontColor, true);
+            context.text(this.client.font, music.aliasName.length() > 16 ? music.aliasName.substring(0, 16) + "..." : music.aliasName, width - 135 - x, 14 + y, musicFontColor, true);
         } else {
             String album = music.album.get("name").getAsString();
-            context.drawText(this.client.textRenderer, album.length() > 16 ? album.substring(0, 16) + "..." : album, width - 135 - x, 14 + y, musicFontColor, true);
+            context.text(this.client.font, album.length() > 16 ? album.substring(0, 16) + "..." : album, width - 135 - x, 14 + y, musicFontColor, true);
         }
 
         StringBuilder artist = new StringBuilder();
@@ -152,7 +144,7 @@ public abstract class InGameHudMixin {
             artist.append(artistData.getAsJsonObject().get("name").getAsString()).append("/");
         }
         artist = new StringBuilder(artist.substring(0, artist.length() - 1));
-        context.drawText(this.client.textRenderer, artist.length() > 16 ? artist.substring(0, 16) + "..." : artist.toString(), width - 135 - x, 24 + y, musicFontColor, true);
+        context.text(this.client.font, artist.length() > 16 ? artist.substring(0, 16) + "..." : artist.toString(), width - 135 - x, 24 + y, musicFontColor, true);
 
         if (music.freeTrialInfo == null) {
             return;

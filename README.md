@@ -1,78 +1,95 @@
-# CloudMusic-Mod [Fabric]
+# CloudMusic-Mod 26.2 [Fabric]
 
-#### 在 mc 中内置网易云歌曲播放器
+在 Minecraft 客户端内播放网易云音乐，支持歌曲、歌单、每日推荐、私人 FM、歌词、封面、播放队列、分享和快捷键。
 
-#### 前置: MaliLib, Fabric API
+本仓库是 [FengLiuFeseliud/CloudMusic-Mod](https://github.com/FengLiuFeseliud/CloudMusic-Mod) 的 Minecraft 26.2 适配 fork。
 
-#### 出现任何问题在 Issues 前请检查 mod 版本是否为最新
+![CloudMusic 图标](src/main/resources/assets/cloudmusic/icon.png)
 
-![logo.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/src/main/resources/assets/cloudmusic/icon.png?raw=true)
+## 运行要求
 
-![run.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/social.png?raw=true)
+| 组件 | 版本 |
+| --- | --- |
+| Minecraft | 26.2 |
+| Java | 25 或更高 |
+| Fabric Loader | 0.19.3 或更高 |
+| Fabric API | 0.158.0+26.2 |
+| MaLiLib | 0.29.3 或更高 |
 
-#### [CloudMusicRoom-Mod](https://github.com/FengLiuFeseliud/CloudMusicRoom-Mod) 用于在服务器配合本 mod 一起听歌使用(正在开发) , 不安装一样保持纯客户端使用
+这是纯客户端模组，服务端无需安装。与 [CloudMusicRoom-Mod](https://github.com/FengLiuFeseliud/CloudMusicRoom-Mod) 配合时可以使用联机听歌功能。
 
-![image](https://github.com/FengLiuFeseliud/CloudMusicRoom-Mod/raw/main/src/main/resources/assets/cloudmusicroom/icon.png?raw=true)
+## 安装
 
-
-## 分享
-
-可以在服务器内使用聊天框分享资源, 点击消息后自动填充获取资源指令
-
-只需要服务器其他人也安装 mod, 服务器不安装
-
-![share.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/share.png?raw=true)
+1. 安装 Minecraft 26.2、Fabric Loader、Fabric API 和 MaLiLib。
+2. 将 `cloudmusic-mod-26.2-0.5.1.jar` 放入实例的 `mods` 文件夹。
+3. 启动游戏，在聊天框输入 `/cloudmusic` 查看完整命令帮助。
 
 ## 登录
 
-实现了四种登录接口 验证码 手机号密码 邮箱 二维码
+支持五种登录方式：
 
-![login_1.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/login_1.png?raw=true)
+- 二维码：`/cloudmusic login qr`
+- 手机验证码：先执行 `/cloudmusic login captcha <手机号>`，再执行 `/cloudmusic login captcha <手机号> <验证码>`
+- 手机密码：`/cloudmusic login phone <手机号> <密码>`
+- 邮箱密码：`/cloudmusic login email <邮箱> <密码>`
+- `MUSIC_U`：`/cloudmusic login music_u <MUSIC_U>`
 
-![login_2.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/login_2.png?raw=true)
+`MUSIC_U` 也可以在 MaLiLib 配置界面的“登录”标签中填写。命令参数既支持纯令牌，也支持 `MUSIC_U=...` 或包含 `MUSIC_U` 的完整 Cookie。
 
-输入邮件报错用双引号包裹即可
+> [!CAUTION]
+> `MUSIC_U` 和 Cookie 等同于账号登录凭证。不要截图、提交到仓库或发送给其他人。通过命令输入时，令牌可能保留在本地命令历史中；更推荐使用配置界面。
 
-![login_3.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/login_3.png?raw=true)
+二维码登录会直接在游戏 HUD 中显示二维码，无需切出游戏。登录状态保存在本地配置中，重启后会自动恢复。
 
-二维码会在游戏中被绘制, 无需切出游戏!
+## 26.2 适配内容
 
-![login_4.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/login_4.png?raw=true)
+- 迁移至 Minecraft 26.2、Java 25、Fabric Loader 0.19.3 和 Fabric API 0.158.0+26.2。
+- MaLiLib 最低版本调整为 0.29.3。
+- 修复异步命令反馈和封面纹理在错误线程调用渲染系统的问题。
+- 修复 26.2 ARGB 字体颜色导致歌名、进度和歌词透明的问题，并兼容旧配置。
+- 重写歌词时间轴，支持 `[分:秒.百分秒]`、`[分:秒:百分秒]`、1～3 位小数、多时间标签和 `offset`。
+- 改进二维码登录会话与 `chainId` 处理。
+- 增加独立 `MUSIC_U` 登录参数，并保留 Cookie 中的其他字段。
 
-## 配置 / 热键
+## 使用与配置
 
-使用 MaliLib (masa 全家桶前置, masa 全家桶大伙肯定至少用一个罢)
+- `/cloudmusic`：查看命令帮助。
+- `/cloudmusic my`：查看当前登录账户。
+- `/cloudmusic my like`：播放“我喜欢的音乐”。
+- `/cloudmusic playing`：查看当前歌曲。
+- `/cloudmusic playing all`：查看播放队列。
+- `/cloudmusic stop`、`/cloudmusic continue`、`/cloudmusic prev`、`/cloudmusic next`：控制播放。
 
-高自定义, 多热键
+通过 Mod Menu 或默认快捷键 `左 Ctrl + C + M` 打开配置界面，可以调整音量、音质、歌词位置与缩放、歌曲信息面板、缓存、登录和代理设置。
 
-![con1.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/con1.png?raw=true)
+## 从源码构建
 
-![con2.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/con2.png?raw=true)
+Windows：
 
-## 指令
+```powershell
+./gradlew.bat clean build
+```
 
-在游戏中使用 `/cloudmusic` 一样可以查看
+Linux/macOS：
 
-![1.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/1.png?raw=true)
+```bash
+./gradlew clean build
+```
 
-![2.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/2.png?raw=true)
+构建产物位于 `build/libs/cloudmusic-mod-26.2-0.5.1.jar`。
 
-![3.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/3.png?raw=true)
+## 截图
 
-![4.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/4.png?raw=true)
+![分享](img/share.png)
 
-![5.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/5.png?raw=true)
+![登录](img/login_1.png)
 
-![6.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/6.png?raw=true)
+![配置](img/con1.png)
 
-![7.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/7.png?raw=true)
+## 参考与致谢
 
-![8.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/8.png?raw=true)
+- 原项目：[FengLiuFeseliud/CloudMusic-Mod](https://github.com/FengLiuFeseliud/CloudMusic-Mod)
+- API：[NeteaseCloudMusicApiEnhanced/api-enhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced)
+- 原 API：[Binaryify/NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)
 
-![9.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/9.png?raw=true)
-
-![10.png](https://github.com/FengLiuFeseliud/CloudMusic-Mod/blob/main/img/10.png?raw=true)
-
-## 参考项目
-
-API 来源: [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)
+项目使用 MIT 许可证，详见 [LICENSE](LICENSE)。

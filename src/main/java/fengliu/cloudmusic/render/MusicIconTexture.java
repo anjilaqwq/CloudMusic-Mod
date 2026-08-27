@@ -1,22 +1,21 @@
 package fengliu.cloudmusic.render;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import fengliu.cloudmusic.CloudMusicClient;
 import fengliu.cloudmusic.music163.IMusic;
 import fengliu.cloudmusic.util.HttpClient;
 import fengliu.cloudmusic.util.PNGConverter;
 import fengliu.cloudmusic.util.QRCode;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.util.Identifier;
-
 import java.io.File;
 import java.io.FileInputStream;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.resources.Identifier;
 
 public class MusicIconTexture {
-    private static final MinecraftClient client = MinecraftClient.getInstance();
-    public static Identifier MUSIC_ICON_ID = Identifier.of(CloudMusicClient.MOD_ID, "texture/music_icon.png");
-    public static Identifier QR_CODE_ID = Identifier.of(CloudMusicClient.MOD_ID, "qr.code");
+    private static final Minecraft client = Minecraft.getInstance();
+    public static Identifier MUSIC_ICON_ID = Identifier.fromNamespaceAndPath(CloudMusicClient.MOD_ID, "texture/music_icon.png");
+    public static Identifier QR_CODE_ID = Identifier.fromNamespaceAndPath(CloudMusicClient.MOD_ID, "qr.code");
     private static boolean canUseIcon = false;
 
     /**
@@ -34,11 +33,11 @@ public class MusicIconTexture {
                 return;
             }
 
-            NativeImageBackedTexture imageTexture = new NativeImageBackedTexture(img);
-            client.execute(
-                    () -> client.getTextureManager().registerTexture(MUSIC_ICON_ID, imageTexture)
-            );
-            canUseIcon = true;
+            client.execute(() -> {
+                DynamicTexture imageTexture = new DynamicTexture(() -> "CloudMusic cover", img);
+                client.getTextureManager().register(MUSIC_ICON_ID, imageTexture);
+                canUseIcon = true;
+            });
         });
         commandThread.setDaemon(true);
         commandThread.setName("CloudMusic getMusicIcon Thread");
@@ -55,10 +54,10 @@ public class MusicIconTexture {
             return;
         }
 
-        NativeImageBackedTexture imageTexture = new NativeImageBackedTexture(img);
-        client.execute(
-                () -> client.getTextureManager().registerTexture(QR_CODE_ID, imageTexture)
-        );
+        client.execute(() -> {
+            DynamicTexture imageTexture = new DynamicTexture(() -> "CloudMusic QR code", img);
+            client.getTextureManager().register(QR_CODE_ID, imageTexture);
+        });
     }
 
     public static boolean canUseIcon() {

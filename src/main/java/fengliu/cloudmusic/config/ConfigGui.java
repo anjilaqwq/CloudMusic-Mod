@@ -9,10 +9,9 @@ import fi.dy.masa.malilib.gui.button.ButtonBase;
 import fi.dy.masa.malilib.gui.button.ButtonGeneric;
 import fi.dy.masa.malilib.gui.button.IButtonActionListener;
 import fi.dy.masa.malilib.util.StringUtils;
-import net.minecraft.client.gui.screen.Screen;
-
 import java.util.Collections;
 import java.util.List;
+import net.minecraft.client.gui.screens.Screen;
 
 public class ConfigGui extends GuiConfigsBase {
 
@@ -124,5 +123,6 @@ public class ConfigGui extends GuiConfigsBase {
         Configs.INSTANCE.save();
 
         MusicCommand.getPlayer().volumeSet(Configs.PLAY.VOLUME.getIntegerValue());
+        MusicCommand.reloadLoginConfig();
     }
 }

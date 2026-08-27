@@ -9,10 +9,9 @@ import fengliu.cloudmusic.music163.data.DjMusic;
 import fengliu.cloudmusic.music163.data.Music;
 import fengliu.cloudmusic.render.MusicIconTexture;
 import fengliu.cloudmusic.util.page.Page;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-
 import javax.sound.sampled.*;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -23,19 +22,19 @@ import java.util.List;
  * 歌曲播放对象
  */
 public class MusicPlayer implements Runnable {
-    private final MinecraftClient client = MinecraftClient.getInstance();
+    private final Minecraft client = Minecraft.getInstance();
     protected final List<IMusic> playList;
-    private IMusic playingMusic = null;
+    private volatile IMusic playingMusic = null;
     private SourceDataLine play;
-    private Lyric lyric;
+    private volatile Lyric lyric;
     protected int playIn = 0;
     protected int playListSize;
     protected boolean loopPlayIn = true;
     protected boolean notExitFlag = true;
-    private boolean load;
+    private volatile boolean load;
     private int volumePercentage;
-    private long playingProgress;
-    private long startPlayingTime;
+    private volatile long playingProgress;
+    private volatile long startPlayingTime;
 
     /**
      * 歌曲播放对象
@@ -101,16 +100,16 @@ public class MusicPlayer implements Runnable {
      */
     protected void playMusic() {
         // 开始播放的时候停止所有的声音(只会停止一瞬间)
-        client.getSoundManager().stopAll();
+        client.getSoundManager().stop();
         IMusic music = this.playList.get(this.playIn);
 
         String musicUrl;
         try {
             musicUrl = music.getPlayUrl();
         } catch (ActionException err) {
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.player != null) {
-                client.player.sendMessage(Text.literal(err.getMessage()), false);
+                client.player.sendSystemMessage(Component.literal(err.getMessage()));
             }
             this.stop();
             return;
@@ -118,13 +117,13 @@ public class MusicPlayer implements Runnable {
 
         if (music instanceof Music aMusic) {
             if (aMusic.freeTrialInfo != null && this.client.player != null) {
-                this.client.player.sendMessage(
-                        Text.translatable(
+                this.client.player.sendSystemMessage(
+                        Component.translatable(
                                 "cloudmusic.info.play.free.trial",
                                 music.getName(),
                                 aMusic.freeTrialInfo.get("start").getAsInt(),
                                 aMusic.freeTrialInfo.get("end").getAsInt()
-                        ), false);
+                        ));
             }
         }
 
@@ -148,10 +147,10 @@ public class MusicPlayer implements Runnable {
             }
 
             CloudMusicClient.cacheHelper.addUseSize(file);
-            this.client.inGameHud.setOverlayMessage(Text.translatable("record.nowPlaying", music.getName()), false);
+            this.client.gui.hud.setOverlayMessage(Component.translatable("record.nowPlaying", music.getName()), false);
             this.play(file);
         } else {
-            this.client.inGameHud.setOverlayMessage(Text.translatable("record.nowPlaying", music.getName()), false);
+            this.client.gui.hud.setOverlayMessage(Component.translatable("record.nowPlaying", music.getName()), false);
             this.play(musicUrl);
         }
     }
@@ -434,16 +433,16 @@ public class MusicPlayer implements Runnable {
             protected TextClickItem putPageItem(Object data) {
                 if (data instanceof Music music) {
                     return new TextClickItem(
-                            Text.literal("§b%s §r§7 - %s".formatted(music.name, Music.getArtistsName(music.artists))),
-                            Text.translatable(IdUtil.getShowInfo("page.player.to"), music.name),
+                            Component.literal("§b%s §r§7 - %s".formatted(music.name, Music.getArtistsName(music.artists))),
+                            Component.translatable(IdUtil.getShowInfo("page.player.to"), music.name),
                             "/cloudmusic to " + (this.limit * this.pageIn + this.data.get(this.pageIn).indexOf(data) + 1)
                     );
                 }
 
                 if (data instanceof DjMusic music) {
                     return new TextClickItem(
-                            Text.literal("§b%s §r§7 - %s".formatted(music.name, music.dj.get("nickname").getAsString())),
-                            Text.translatable(IdUtil.getShowInfo("page.player.to"), music.name),
+                            Component.literal("§b%s §r§7 - %s".formatted(music.name, music.dj.get("nickname").getAsString())),
+                            Component.translatable(IdUtil.getShowInfo("page.player.to"), music.name),
                             "/cloudmusic to " + (this.limit * this.pageIn + this.data.get(this.pageIn).indexOf(data) + 1)
                     );
                 }

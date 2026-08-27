@@ -10,9 +10,9 @@
   ],
 
   "contact": {
-    "homepage": "https://github.com/FengLiuFeseliud/CloudMusic-Mod",
-    "sources": "https://github.com/FengLiuFeseliud/CloudMusic-Mod",
-    "issues": "https://github.com/FengLiuFeseliud/CloudMusic-Mod/issues"
+    "homepage": "https://github.com/anjilaqwq/CloudMusic-Mod",
+    "sources": "https://github.com/anjilaqwq/CloudMusic-Mod",
+    "issues": "https://github.com/anjilaqwq/CloudMusic-Mod/issues"
   },
 
   "license": "MIT",
@@ -35,7 +35,10 @@
     }
   ],
   "depends": {
-    "minecraft": "${minecraft_version}",
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=25",
+    "fabric-api": "*",
     "malilib": ">=${malilib_version}"
   }
 }
