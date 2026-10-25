@@ -15,7 +15,7 @@
     "issues": "https://github.com/anjilaqwq/CloudMusic-Mod/issues"
   },
 
-  "license": "MIT",
+  "license": ["WTFNMFPL", "MIT"],
   "icon": "assets/cloudmusic/icon.png",
 
   "environment": "client",

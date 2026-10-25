@@ -92,4 +92,8 @@ Linux/macOS：
 - API：[NeteaseCloudMusicApiEnhanced/api-enhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced)
 - 原 API：[Binaryify/NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)
 
-项目使用 MIT 许可证，详见 [LICENSE](LICENSE)。
+## 许可证
+
+本 fork 的新增内容与修改采用 [WTFNMFPL](LICENSE)（Do What The Fuck You Want To But It's Not My Fault Public License，第 1 版）：想怎么用就怎么用，出了任何问题都不要找作者。
+
+原项目 [FengLiuFeseliud/CloudMusic-Mod](https://github.com/FengLiuFeseliud/CloudMusic-Mod) 的代码仍遵循 MIT 许可证，完整版权与许可声明保留在 [LICENSE.upstream](LICENSE.upstream)；分发时须保留该声明。第三方依赖继续遵循各自的许可证。

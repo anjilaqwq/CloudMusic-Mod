@@ -69,5 +69,5 @@ java {
 }
 
 jar {
-    from("LICENSE")
+    from("LICENSE", "LICENSE.upstream")
 }
